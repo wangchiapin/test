@@ -6,5 +6,5 @@ import react from "@vitejs/plugin-react";
 // base should be "/my-book/"
 export default defineConfig({
   plugins: [react()],
-  base: "/moneybook/",
+  base: "/test/",
 });
