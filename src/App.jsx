@@ -26,6 +26,12 @@ import SettingsModal from "./SettingsModal.jsx";
 
 const DEFAULT_AI_SETTINGS = { apiKey: "", model: "gemini-flash-latest" };
 
+// ⚠️ 測試用開關：設成 true 時完全略過登入與 Firebase 雲端同步，
+// 只在瀏覽器記憶體裡操作，重新整理頁面資料就會消失。
+// 只適合在本機 `npm run dev` 測試 UI/功能用；
+// 正式部署給別人使用之前，務必改回 false，否則不會有登入保護、資料也存不住。
+const TEST_MODE = true;
+
 // ---------- login screen ----------
 
 function LoginScreen() {
@@ -104,10 +110,22 @@ export default function App() {
   const [statsUnlocked, setStatsUnlocked] = useState(false);
   const initializedMonth = useRef(false);
 
-  useEffect(() => onAuthStateChanged(auth, (u) => setUser(u)), []);
+  useEffect(() => {
+    if (TEST_MODE) {
+      // 測試模式：假裝已經登入，不呼叫 Firebase Auth
+      setUser({ uid: "test-user", email: "測試模式（未連接 Firebase）" });
+      return;
+    }
+    return onAuthStateChanged(auth, (u) => setUser(u));
+  }, []);
 
   useEffect(() => {
     if (!user) return;
+    if (TEST_MODE) {
+      // 測試模式：不讀取 Firestore，直接用空白帳本開始測試
+      setDataLoaded(true);
+      return;
+    }
     const ref = doc(db, "ledgers", user.uid);
     const unsub = onSnapshot(
       ref,
@@ -132,6 +150,7 @@ export default function App() {
   }, [user]);
 
   const persist = useCallback(async (patch) => {
+    if (TEST_MODE) return; // 測試模式不寫入 Firebase，資料只留在瀏覽器記憶體
     if (!user) return;
     try {
       await setDoc(doc(db, "ledgers", user.uid), { ...patch, updatedAt: Date.now() }, { merge: true });
@@ -252,6 +271,12 @@ export default function App() {
         }
       `}</style>
 
+      {TEST_MODE && (
+        <div style={{ background: "#3F7D5C", color: "#fff", textAlign: "center", fontSize: 12, padding: "6px 0", fontWeight: 700 }}>
+          測試模式：資料不會存起來，重新整理就會清空
+        </div>
+      )}
+
       <div className="app-header">
         <div style={{ position: "sticky", top: 0, zIndex: 15, background: PAPER, paddingTop: 20, paddingBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
@@ -269,9 +294,11 @@ export default function App() {
             <button onClick={() => { setSettingsSection("categories"); setShowSettings(true); }} style={{ background: "none", border: "none", color: "#B8AC91", fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
               <SettingsIcon size={13} /> 設定
             </button>
-            <button onClick={() => signOut(auth)} style={{ background: "none", border: "none", color: "#B8AC91", fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
-              <LogOut size={13} /> 登出
-            </button>
+            {!TEST_MODE && (
+              <button onClick={() => signOut(auth)} style={{ background: "none", border: "none", color: "#B8AC91", fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                <LogOut size={13} /> 登出
+              </button>
+            )}
           </div>
 
           {saveError && (
